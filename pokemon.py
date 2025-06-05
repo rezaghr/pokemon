@@ -230,6 +230,15 @@ def model_on_raw_data(df, X, y):
     print(f"  • Silhouette Score (Raw Data, k=4): {sil_score:.4f}")
     results["silhouette_raw"] = sil_score
 
+    # Show and save cluster assignments and examples
+    show_cluster_examples(
+        df,
+        clusters,
+        n_clusters=4,
+        title="Raw Data Clusters (k=4)",
+        filename=os.path.join(CHART_DIR, "raw_cluster_assignments.csv")
+    )
+
     # ---------- Split into Train/Test ----------
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -407,6 +416,15 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     print(f"  • Silhouette Score (Cleaned Data, k=4): {sil_score_c:.4f}")
     results["silhouette_clean"] = sil_score_c
 
+    # Show and save cluster assignments and examples
+    show_cluster_examples(
+        df_clean,
+        clusters_c,
+        n_clusters=4,
+        title="Cleaned Data Clusters (k=4)",
+        filename=os.path.join(CHART_DIR, "cleaned_cluster_assignments.csv")
+    )
+
     # ---------- Split into Train/Test ----------
     X_train, X_test, y_train, y_test = train_test_split(
         X_clean, y_clean, test_size=0.2, random_state=42
@@ -499,6 +517,35 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     print(f"✅ Feature Importances chart (Cleaned) saved to '{path_fi_clean}'.")
 
     return results
+
+
+def show_cluster_examples(df, clusters, n_clusters, title, filename):
+    """
+    Print and save sample Pokémon from each cluster, show cluster sizes,
+    and print the mean stats for each cluster to explain what defines each group.
+    """
+    df_clusters = df.copy()
+    df_clusters["Cluster"] = clusters
+    cluster_counts = df_clusters["Cluster"].value_counts().sort_index()
+    print(f"\n{title}")
+    print("Cluster sizes:")
+    for i in range(n_clusters):
+        print(f"  Cluster {i}: {cluster_counts.get(i, 0)} Pokémon")
+
+    # Print the mean stats for each cluster to show what defines them
+    print("\nCluster centers (mean stats for each cluster):")
+    stat_cols = ["Total", "HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]
+    cluster_means = df_clusters.groupby("Cluster")[stat_cols].mean().round(2)
+    print(cluster_means)
+
+    print("\nSample Pokémon from each cluster:")
+    for i in range(n_clusters):
+        sample = df_clusters[df_clusters["Cluster"] == i].head(5)[["Name", "Type1", "Type2", "Total", "HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]]
+        print(f"\nCluster {i} (showing up to 5 Pokémon):")
+        print(sample.to_string(index=False))
+    # Save cluster assignments to CSV
+    df_clusters.to_csv(filename, index=False, encoding="utf-8-sig")
+    print(f"\n✅ Cluster assignments saved to '{filename}'.")
 
 
 # --------------------------------------------
