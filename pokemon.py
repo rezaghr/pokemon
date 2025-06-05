@@ -1,95 +1,95 @@
 """
-پروژه: اسکرپ Pokémon DB – Pokedex All و تحلیل داده‌ها با ۴ الگوریتم یادگیری ماشین
-افزوده‌شده: نمودارهای کاربردی برای تحلیل توزیع داده، خوشه‌بندی و اهمیت ویژگی‌ها.
+Project: Pokémon DB Scraper – Pokedex All and Data Analysis with 4 Machine Learning Algorithms
+Added: Useful charts for data distribution analysis, clustering, and feature importance.
 
-مراحل:
-1. جمع‌آوری داده‌ها از Pokémon DB (Pokedex All)
-2. پیش‌پردازش اولیهٔ دادهٔ خام
-3. مدل‌سازی (K-Means, Linear Regression, Decision Tree, Random Forest) روی دادهٔ خام
-4. نمودار توزیع Total و ماتریس همبستگی (Raw Data)
-5. پاک‌سازی داده‌ها (حذف Outliers)
-6. مدل‌سازی مجدد روی دادهٔ پاک‌شده
-7. مقایسهٔ معیارها (Silhouette Score, MAE, RMSE) قبل و بعد از پاک‌سازی
-8. نمودار Silhouette vs k (Raw/Cleaned)
-9. نمودار اهمیت ویژگی‌ها (Raw/Cleaned)
-10. نمودار Actual vs Predicted برای هر مدل (Raw/Cleaned)
+Steps:
+1. Scrape data from Pokémon DB (Pokedex All)
+2. Initial preprocessing of raw data
+3. Modeling (K-Means, Linear Regression, Decision Tree, Random Forest) on raw data
+4. Distribution chart of Total and correlation matrix (Raw Data)
+5. Data cleaning (remove Outliers)
+6. Re-modeling on cleaned data
+7. Compare metrics (Silhouette Score, MAE, RMSE) before and after cleaning
+8. Silhouette vs k chart (Raw/Cleaned)
+9. Feature importance chart (Raw/Cleaned)
+10. Actual vs Predicted chart for each model (Raw/Cleaned)
 """
 
 # ----------------------------
-# وارد کردن تمام کتابخانه‌ها
+# Import all libraries
 # ----------------------------
 import os
-import requests                      # برای ارسال درخواست HTTP 
-from bs4 import BeautifulSoup        # برای پارس HTML 
-import pandas as pd                  # برای کار با DataFrame و CSV 
-import numpy as np                   # برای محاسبات عددی 
+import requests                      # For sending HTTP requests
+from bs4 import BeautifulSoup        # For parsing HTML
+import pandas as pd                  # For working with DataFrame and CSV
+import numpy as np                   # For numerical computations
 
-from sklearn.cluster import KMeans   # خوشه‌بندی K-Means 
-from sklearn.linear_model import LinearRegression  # رگرسیون خطی 
-from sklearn.tree import DecisionTreeRegressor      # درخت تصمیم 
-from sklearn.ensemble import RandomForestRegressor  # جنگل تصادفی 
+from sklearn.cluster import KMeans   # K-Means clustering
+from sklearn.linear_model import LinearRegression  # Linear Regression
+from sklearn.tree import DecisionTreeRegressor      # Decision Tree
+from sklearn.ensemble import RandomForestRegressor  # Random Forest
 
-from sklearn.metrics import silhouette_score, mean_absolute_error, mean_squared_error  # معیارها: Silhouette, MAE, RMSE 
-from sklearn.model_selection import train_test_split   # تقسیم داده به Train/Test 
-from sklearn.preprocessing import StandardScaler        # برای مقیاس‌بندی ویژگی‌ها 
+from sklearn.metrics import silhouette_score, mean_absolute_error, mean_squared_error  # Metrics: Silhouette, MAE, RMSE
+from sklearn.model_selection import train_test_split   # Split data into Train/Test
+from sklearn.preprocessing import StandardScaler        # For feature scaling
 
-import matplotlib.pyplot as plt  # برای نمایش نمودار 
-import seaborn as sns            # برای رسم ماتریس همبستگی 
+import matplotlib.pyplot as plt  # For plotting
+import seaborn as sns            # For drawing correlation matrix
 
 
 # --------------------------------------------
-# ثابت‌ها و پارامترهای اصلی
+# Constants and main parameters
 # --------------------------------------------
 RAW_CSV = "pokemon_raw.csv"
 CLEAN_CSV = "pokemon_clean.csv"
 CHART_DIR = "charts"
 
-# ایجاد پوشهٔ charts در صورت نبودن
+# Create charts directory if it doesn't exist
 if not os.path.exists(CHART_DIR):
     os.makedirs(CHART_DIR)
 
 
 # --------------------------------------------
-# 1. تابع اسکرپ جدول Pokémon
+# 1. Scrape Pokémon table function
 # --------------------------------------------
 def scrape_pokemon_stats(output_csv=RAW_CSV):
     """
-    این تابع صفحهٔ Pokedex All را اسکرپ می‌کند و جدول را به DataFrame تبدیل و در خروجی ذخیره می‌کند.
-    ساختار فعلی جدول Pokémon DB شبیه به Medium توضیح داده شده است (۱۰ ستون در هر سطر) .
+    This function scrapes the Pokedex All page, converts the table to a DataFrame, and saves it.
+    The current structure of the Pokémon DB table is as described on Medium (10 columns per row).
     """
     url = "https://pokemondb.net/pokedex/all"
-    print("⏳ ارسال درخواست به Pokémon DB برای دریافت داده‌های Pokédex ...")
+    print("⏳ Sending request to Pokémon DB to fetch Pokédex data ...")
     response = requests.get(url)
     if response.status_code != 200:
-        raise Exception(f"خطا در دریافت داده‌ها: {response.status_code}")
+        raise Exception(f"Error fetching data: {response.status_code}")
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # یافتن جدول اصلی با id="pokedex"
+    # Find main table with id="pokedex"
     table = soup.find("table", {"id": "pokedex"})
     if table is None:
-        raise Exception("⚠️ جدول Pokedex یافت نشد!")
+        raise Exception("⚠️ Pokedex table not found!")
 
-    # استخراج سطرهای جدول (هر <tr> شامل 10 <td> است) 
+    # Extract table rows (each <tr> has 10 <td>)
     rows = table.find("tbody").find_all("tr")
     data = []
     for row in rows:
         cols = row.find_all("td")
-        # بررسی اینکه دقیقاً 10 ستون داریم
+        # Ensure exactly 10 columns
         if len(cols) < 10:
             continue
 
-        # ستون‌ها (اندیس 0 تا 9): #, Name, Type, Total, HP, Attack, Defense, Sp. Atk, Sp. Def, Speed
-        pokedex_no = cols[0].text.strip()                        # شماره Pokédex 
-        name = cols[1].text.strip()                               # نام Pokémon
-        types = [t.text.strip() for t in cols[2].find_all("a")]  # لیست نوع 
-        total = int(cols[3].text.strip())                         # مجموع امتیازات عددی
-        hp = int(cols[4].text.strip())                            # HP
-        attack = int(cols[5].text.strip())                        # Attack
-        defense = int(cols[6].text.strip())                       # Defense
-        sp_atk = int(cols[7].text.strip())                         # Special Attack
-        sp_def = int(cols[8].text.strip())                         # Special Defense
-        speed = int(cols[9].text.strip())                          # Speed
+        # Columns (index 0 to 9): #, Name, Type, Total, HP, Attack, Defense, Sp. Atk, Sp. Def, Speed
+        pokedex_no = cols[0].text.strip()                        # Pokédex number
+        name = cols[1].text.strip()                              # Pokémon name
+        types = [t.text.strip() for t in cols[2].find_all("a")]  # Type list
+        total = int(cols[3].text.strip())                        # Total base stats
+        hp = int(cols[4].text.strip())                           # HP
+        attack = int(cols[5].text.strip())                       # Attack
+        defense = int(cols[6].text.strip())                      # Defense
+        sp_atk = int(cols[7].text.strip())                       # Special Attack
+        sp_def = int(cols[8].text.strip())                       # Special Defense
+        speed = int(cols[9].text.strip())                        # Speed
 
         data.append({
             "PokedexNo": pokedex_no,
@@ -106,55 +106,55 @@ def scrape_pokemon_stats(output_csv=RAW_CSV):
         })
 
     df = pd.DataFrame(data)
-    df.to_csv(output_csv, index=False, encoding="utf-8-sig")     # ذخیرهٔ CSV خام 
-    print(f"✅ دادهٔ خام Pokémon در فایل '{output_csv}' ذخیره شد. تعداد رکوردها: {len(df)}")
+    df.to_csv(output_csv, index=False, encoding="utf-8-sig")     # Save raw CSV
+    print(f"✅ Raw Pokémon data saved to '{output_csv}'. Number of records: {len(df)}")
 
-    # نمایش ۵ سطر اول و آخر برای اطمینان
-    print("\nنمونهٔ ۵ Pokémon اول:")
+    # Show first and last 5 rows for verification
+    print("\nFirst 5 Pokémon samples:")
     print(df.head(5))
-    print("\nنمونهٔ ۵ Pokémon آخر:")
+    print("\nLast 5 Pokémon samples:")
     print(df.tail(5))
     return df
 
 
 # --------------------------------------------
-# 2. پیش‌پردازش اولیهٔ دادهٔ خام
+# 2. Initial preprocessing of raw data
 # --------------------------------------------
 def initial_preprocessing(input_csv=RAW_CSV):
     """
-    - بارگذاری CSV خام
-    - حذف ردیف‌هایی که یکی از ستون‌های عددی‌شان ناقص (NaN) است
-    - تعیین X و y (ویژگی‌ها و هدف)
+    - Load raw CSV
+    - Remove rows with missing numeric columns (NaN)
+    - Define X and y (features and target)
     """
-    print("\n⏳ شروع پیش‌پردازش اولیهٔ دادهٔ خام ...")
-    df = pd.read_csv(input_csv)  # خواندن CSV خام 
+    print("\n⏳ Starting initial preprocessing of raw data ...")
+    df = pd.read_csv(input_csv)  # Read raw CSV
 
-    print("  • ستون‌ها:", df.columns.tolist())
-    print("  • شکل جدول قبل از dropna:", df.shape)
-    print("  • پنج ردیف اول:\n", df.head(), "\n")
+    print("  • Columns:", df.columns.tolist())
+    print("  • Table shape before dropna:", df.shape)
+    print("  • First five rows:\n", df.head(), "\n")
 
-    # حذف Pokémonهایی که یکی از ستون‌های عددی‌شان ناقص است
+    # Remove Pokémon with missing numeric columns
     df = df.dropna(subset=["Total", "HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"])
-    print("  • شکل جدول پس از dropna:", df.shape, "\n")
+    print("  • Table shape after dropna:", df.shape, "\n")
 
-    # تعیین X (ویژگی‌ها) و y (هدف)
+    # Define X (features) and y (target)
     feature_cols = ["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]
     X = df[feature_cols]
     y = df["Total"]
 
-    print("پیش‌پردازش اولیه انجام شد.\n")
+    print("Initial preprocessing completed.\n")
     return df, X, y
 
 
 # --------------------------------------------
-# 3. نمودارهای توزیع و همبستگی (Raw Data)
+# 3. Distribution and correlation charts (Raw Data)
 # --------------------------------------------
 def plot_raw_data_insights(df):
     """
-    رسم نمودارهای توزیع Total و ماتریس همبستگی شش ویژگی عددی
-    و ذخیرهٔ آن‌ها در پوشهٔ charts/
+    Plot distribution of Total and correlation matrix of six numeric features,
+    and save them in charts/
     """
-    # ۱. نمودار توزیع Total
+    # 1. Distribution chart of Total
     plt.figure(figsize=(8, 5))
     sns.histplot(df["Total"], bins=30, kde=True, color="skyblue")
     plt.title("Distribution of Total Base Stats (Raw Data)")
@@ -164,9 +164,9 @@ def plot_raw_data_insights(df):
     path_total_hist = os.path.join(CHART_DIR, "raw_total_distribution.png")
     plt.savefig(path_total_hist)
     plt.close()
-    print(f"✅ نمودار توزیع Total (Raw) در '{path_total_hist}' ذخیره شد.")
+    print(f"✅ Total distribution chart (Raw) saved to '{path_total_hist}'.")
 
-    # ۲. ماتریس همبستگی شش ویژگی عددی
+    # 2. Correlation matrix of six numeric features
     corr = df[["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]].corr()
     plt.figure(figsize=(8, 6))
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
@@ -175,29 +175,29 @@ def plot_raw_data_insights(df):
     path_corr = os.path.join(CHART_DIR, "raw_correlation_matrix.png")
     plt.savefig(path_corr)
     plt.close()
-    print(f"✅ ماتریس همبستگی (Raw) در '{path_corr}' ذخیره شد.")
+    print(f"✅ Correlation matrix (Raw) saved to '{path_corr}'.")
 
 
 # --------------------------------------------
-# 4. مدل‌سازی روی دادهٔ خام
+# 4. Modeling on raw data
 # --------------------------------------------
 def model_on_raw_data(df, X, y):
     """
-    چهار الگوریتم را روی دادهٔ خام اجرا می‌کند و نمودارهای زیر را نیز می‌سازد:
-      ۱. K-Means → محاسبۀ Silhouette Score و ذخیرهٔ Silhouette vs k (Raw)
-      ۲. Linear Regression → محاسبۀ MAE و RMSE و نمودار Actual vs Predicted
-      ۳. Decision Tree Regressor → محاسبۀ MAE و RMSE و نمودار Actual vs Predicted
-      ۴. Random Forest Regressor → محاسبۀ MAE و RMSE و نمودار Actual vs Predicted و Feature Importances (نمودار میله‌ای)
+    Runs four algorithms on raw data and also creates the following charts:
+      1. K-Means → Calculate Silhouette Score and save Silhouette vs k (Raw)
+      2. Linear Regression → Calculate MAE and RMSE and Actual vs Predicted chart
+      3. Decision Tree Regressor → Calculate MAE and RMSE and Actual vs Predicted chart
+      4. Random Forest Regressor → Calculate MAE and RMSE and Actual vs Predicted chart and Feature Importances (bar chart)
     """
-    print("⏳ اجرای مدل‌ها روی دادهٔ خام ...")
+    print("⏳ Running models on raw data ...")
 
     if X.shape[0] == 0:
-        print("⚠️ دادهٔ خام هیچ رکوردی ندارد؛ ادامهٔ مدلسازی ممکن نیست.")
+        print("⚠️ Raw data has no records; modeling cannot continue.")
         return None
 
     results = {}
 
-    # ---------- خوشه‌بندی K-Means و Silhouette vs k ----------
+    # ---------- K-Means clustering and Silhouette vs k ----------
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
@@ -209,7 +209,7 @@ def model_on_raw_data(df, X, y):
         sil = silhouette_score(X_scaled, labels)
         silhouette_scores.append(sil)
 
-    # ذخیرهٔ نمودار Silhouette vs k (Raw)
+    # Save Silhouette vs k chart (Raw)
     plt.figure(figsize=(8, 5))
     plt.plot(list(K_range), silhouette_scores, marker="o", linestyle="--", color="olive")
     plt.title("Silhouette Score vs k (Raw Data)")
@@ -221,21 +221,21 @@ def model_on_raw_data(df, X, y):
     path_sil_raw = os.path.join(CHART_DIR, "raw_silhouette_vs_k.png")
     plt.savefig(path_sil_raw)
     plt.close()
-    print(f"✅ Silhouette vs k (Raw) در '{path_sil_raw}' ذخیره شد.")
+    print(f"✅ Silhouette vs k (Raw) saved to '{path_sil_raw}'.")
 
-    # برای k=4 (پیش‌فرض)
+    # For k=4 (default)
     kmeans = KMeans(n_clusters=4, random_state=42)
     clusters = kmeans.fit_predict(X_scaled)
     sil_score = silhouette_score(X_scaled, clusters)
     print(f"  • Silhouette Score (Raw Data, k=4): {sil_score:.4f}")
     results["silhouette_raw"] = sil_score
 
-    # ---------- تقسیم به Train/Test ----------
+    # ---------- Split into Train/Test ----------
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    # ---------- رگرسیون خطی (Linear Regression) ----------
+    # ---------- Linear Regression ----------
     lr = LinearRegression()
     lr.fit(X_train, y_train)
     y_pred_lr = lr.predict(X_test)
@@ -245,7 +245,7 @@ def model_on_raw_data(df, X, y):
     results["lr_mae_raw"] = mae_lr
     results["lr_rmse_raw"] = rmse_lr
 
-    # نمودار Actual vs Predicted (Linear Regression, Raw)
+    # Actual vs Predicted chart (Linear Regression, Raw)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_lr, alpha=0.6, color="navy", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -256,9 +256,9 @@ def model_on_raw_data(df, X, y):
     path_lr_raw = os.path.join(CHART_DIR, "raw_actual_vs_predicted_lr.png")
     plt.savefig(path_lr_raw)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (LR, Raw) در '{path_lr_raw}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (LR, Raw) saved to '{path_lr_raw}'.")
 
-    # ---------- درخت تصمیم (Decision Tree Regressor) ----------
+    # ---------- Decision Tree Regressor ----------
     dt = DecisionTreeRegressor(random_state=42)
     dt.fit(X_train, y_train)
     y_pred_dt = dt.predict(X_test)
@@ -268,7 +268,7 @@ def model_on_raw_data(df, X, y):
     results["dt_mae_raw"] = mae_dt
     results["dt_rmse_raw"] = rmse_dt
 
-    # نمودار Actual vs Predicted (Decision Tree, Raw)
+    # Actual vs Predicted chart (Decision Tree, Raw)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_dt, alpha=0.6, color="darkorange", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -279,9 +279,9 @@ def model_on_raw_data(df, X, y):
     path_dt_raw = os.path.join(CHART_DIR, "raw_actual_vs_predicted_dt.png")
     plt.savefig(path_dt_raw)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (DT, Raw) در '{path_dt_raw}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (DT, Raw) saved to '{path_dt_raw}'.")
 
-    # ---------- جنگل تصادفی (Random Forest Regressor) ----------
+    # ---------- Random Forest Regressor ----------
     rf = RandomForestRegressor(n_estimators=100, random_state=42)
     rf.fit(X_train, y_train)
     y_pred_rf = rf.predict(X_test)
@@ -291,7 +291,7 @@ def model_on_raw_data(df, X, y):
     results["rf_mae_raw"] = mae_rf
     results["rf_rmse_raw"] = rmse_rf
 
-    # نمودار Actual vs Predicted (Random Forest, Raw)
+    # Actual vs Predicted chart (Random Forest, Raw)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_rf, alpha=0.6, color="forestgreen", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -302,9 +302,9 @@ def model_on_raw_data(df, X, y):
     path_rf_raw = os.path.join(CHART_DIR, "raw_actual_vs_predicted_rf.png")
     plt.savefig(path_rf_raw)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (RF, Raw) در '{path_rf_raw}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (RF, Raw) saved to '{path_rf_raw}'.")
 
-    # نمودار Bar Chart اهمیت ویژگی‌ها (Random Forest, Raw)
+    # Bar Chart of Feature Importances (Random Forest, Raw)
     importances = rf.feature_importances_
     feature_names = X.columns.tolist()
     fi = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
@@ -319,27 +319,27 @@ def model_on_raw_data(df, X, y):
     path_fi_raw = os.path.join(CHART_DIR, "raw_feature_importances.png")
     plt.savefig(path_fi_raw)
     plt.close()
-    print(f"✅ نمودار Feature Importances (Raw) در '{path_fi_raw}' ذخیره شد.")
+    print(f"✅ Feature Importances chart (Raw) saved to '{path_fi_raw}'.")
 
     return results
 
 
 # --------------------------------------------
-# 5. پاک‌سازی داده‌ها (Data Cleaning)
+# 5. Data cleaning
 # --------------------------------------------
 def clean_data(df, output_csv=CLEAN_CSV):
     """
-    - حذف Pokémonهایی که Total < 100 یا Total > 700 (حذف مقادیر پرت)
-    - حذف ردیف‌هایی که یکی از شش ویژگی آماری‌شان صفر است
-    - ذخیرهٔ CSV پاک‌شده و بازگشت X_clean, y_clean
+    - Remove Pokémon with Total < 100 or Total > 700 (remove outliers)
+    - Remove rows where any of the six stats is zero
+    - Save cleaned CSV and return X_clean, y_clean
     """
-    print("⏳ شروع پاک‌سازی داده‌ها ...")
+    print("⏳ Starting data cleaning ...")
     df_clean = df.copy()
 
-    # حذف Outliers بر اساس Total (کمتر از 100 یا بیشتر از 700) 
+    # Remove outliers based on Total (less than 100 or more than 700)
     df_clean = df_clean[(df_clean["Total"] >= 100) & (df_clean["Total"] <= 700)]
 
-    # حذف ردیف‌هایی که یکی از ویژگی‌های آماری‌شان صفر است
+    # Remove rows where any stat is zero
     df_clean = df_clean[(df_clean["HP"] > 0) &
                         (df_clean["Attack"] > 0) &
                         (df_clean["Defense"] > 0) &
@@ -347,8 +347,8 @@ def clean_data(df, output_csv=CLEAN_CSV):
                         (df_clean["Sp. Def"] > 0) &
                         (df_clean["Speed"] > 0)]
 
-    df_clean.to_csv(output_csv, index=False, encoding="utf-8-sig")  # ذخیرهٔ CSV پاک‌شده 
-    print(f"  • دادهٔ پاک‌شده ({len(df_clean)} رکورد) در '{output_csv}' ذخیره شد.\n")
+    df_clean.to_csv(output_csv, index=False, encoding="utf-8-sig")  # Save cleaned CSV
+    print(f"  • Cleaned data ({len(df_clean)} records) saved to '{output_csv}'.\n")
 
     X_clean = df_clean[["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]]
     y_clean = df_clean["Total"]
@@ -356,25 +356,25 @@ def clean_data(df, output_csv=CLEAN_CSV):
 
 
 # --------------------------------------------
-# 6. مدل‌سازی روی دادهٔ پاک‌شده
+# 6. Modeling on cleaned data
 # --------------------------------------------
 def model_on_clean_data(df_clean, X_clean, y_clean):
     """
-    همان چهار الگوریتم را روی دادهٔ پاک‌شده اجرا می‌کند و نمودارهای زیر را نیز می‌سازد:
-      ۱. K-Means → Silhouette Score و Silhouette vs k (Cleaned)
-      ۲. Linear Regression → MAE, RMSE و نمودار Actual vs Predicted
-      ۳. Decision Tree Regressor → MAE, RMSE و نمودار Actual vs Predicted
-      ۴. Random Forest Regressor → MAE, RMSE و نمودار Actual vs Predicted و اهمیت ویژگی‌ها (نمودار میله‌ای)
+    Runs the same four algorithms on cleaned data and also creates the following charts:
+      1. K-Means → Silhouette Score and Silhouette vs k (Cleaned)
+      2. Linear Regression → MAE, RMSE and Actual vs Predicted chart
+      3. Decision Tree Regressor → MAE, RMSE and Actual vs Predicted chart
+      4. Random Forest Regressor → MAE, RMSE and Actual vs Predicted chart and Feature Importances (bar chart)
     """
-    print("⏳ اجرای مدل‌ها روی دادهٔ پاک‌شده ...")
+    print("⏳ Running models on cleaned data ...")
 
     if X_clean.shape[0] == 0:
-        print("⚠️ دادهٔ پاک‌شده هیچ رکوردی ندارد؛ ادامهٔ خوشه‌بندی ممکن نیست.")
+        print("⚠️ Cleaned data has no records; clustering cannot continue.")
         return None
 
     results = {}
 
-    # ---------- خوشه‌بندی K-Means و Silhouette vs k (Cleaned) ----------
+    # ---------- K-Means clustering and Silhouette vs k (Cleaned) ----------
     scaler_c = StandardScaler()
     Xc_scaled = scaler_c.fit_transform(X_clean)
 
@@ -386,7 +386,7 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
         sil_c = silhouette_score(Xc_scaled, labels_c)
         silhouette_scores_c.append(sil_c)
 
-    # ذخیرهٔ نمودار Silhouette vs k (Cleaned)
+    # Save Silhouette vs k chart (Cleaned)
     plt.figure(figsize=(8, 5))
     plt.plot(list(K_range), silhouette_scores_c, marker="o", linestyle="--", color="crimson")
     plt.title("Silhouette Score vs k (Cleaned Data)")
@@ -398,21 +398,21 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     path_sil_clean = os.path.join(CHART_DIR, "cleaned_silhouette_vs_k.png")
     plt.savefig(path_sil_clean)
     plt.close()
-    print(f"✅ Silhouette vs k (Cleaned) در '{path_sil_clean}' ذخیره شد.")
+    print(f"✅ Silhouette vs k (Cleaned) saved to '{path_sil_clean}'.")
 
-    # برای k=4 (پیش‌فرض)
+    # For k=4 (default)
     kmeans_c = KMeans(n_clusters=4, random_state=42)
     clusters_c = kmeans_c.fit_predict(Xc_scaled)
     sil_score_c = silhouette_score(Xc_scaled, clusters_c)
     print(f"  • Silhouette Score (Cleaned Data, k=4): {sil_score_c:.4f}")
     results["silhouette_clean"] = sil_score_c
 
-    # ---------- تقسیم به Train/Test ----------
+    # ---------- Split into Train/Test ----------
     X_train, X_test, y_train, y_test = train_test_split(
         X_clean, y_clean, test_size=0.2, random_state=42
     )
 
-    # ---------- رگرسیون خطی (Linear Regression) ----------
+    # ---------- Linear Regression ----------
     lr_c = LinearRegression()
     lr_c.fit(X_train, y_train)
     y_pred_lr_c = lr_c.predict(X_test)
@@ -422,7 +422,7 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     results["lr_mae_clean"] = mae_lr_c
     results["lr_rmse_clean"] = rmse_lr_c
 
-    # نمودار Actual vs Predicted (Linear Regression, Cleaned)
+    # Actual vs Predicted chart (Linear Regression, Cleaned)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_lr_c, alpha=0.6, color="dodgerblue", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -433,9 +433,9 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     path_lr_clean = os.path.join(CHART_DIR, "cleaned_actual_vs_predicted_lr.png")
     plt.savefig(path_lr_clean)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (LR, Cleaned) در '{path_lr_clean}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (LR, Cleaned) saved to '{path_lr_clean}'.")
 
-    # ---------- درخت تصمیم (Decision Tree Regressor) ----------
+    # ---------- Decision Tree Regressor ----------
     dt_c = DecisionTreeRegressor(random_state=42)
     dt_c.fit(X_train, y_train)
     y_pred_dt_c = dt_c.predict(X_test)
@@ -445,7 +445,7 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     results["dt_mae_clean"] = mae_dt_c
     results["dt_rmse_clean"] = rmse_dt_c
 
-    # نمودار Actual vs Predicted (Decision Tree, Cleaned)
+    # Actual vs Predicted chart (Decision Tree, Cleaned)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_dt_c, alpha=0.6, color="darkorange", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -456,9 +456,9 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     path_dt_clean = os.path.join(CHART_DIR, "cleaned_actual_vs_predicted_dt.png")
     plt.savefig(path_dt_clean)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (DT, Cleaned) در '{path_dt_clean}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (DT, Cleaned) saved to '{path_dt_clean}'.")
 
-    # ---------- جنگل تصادفی (Random Forest Regressor) ----------
+    # ---------- Random Forest Regressor ----------
     rf_c = RandomForestRegressor(n_estimators=100, random_state=42)
     rf_c.fit(X_train, y_train)
     y_pred_rf_c = rf_c.predict(X_test)
@@ -468,7 +468,7 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     results["rf_mae_clean"] = mae_rf_c
     results["rf_rmse_clean"] = rmse_rf_c
 
-    # نمودار Actual vs Predicted (Random Forest, Cleaned)
+    # Actual vs Predicted chart (Random Forest, Cleaned)
     plt.figure(figsize=(6, 6))
     plt.scatter(y_test, y_pred_rf_c, alpha=0.6, color="forestgreen", edgecolor="k")
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
@@ -479,9 +479,9 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     path_rf_clean = os.path.join(CHART_DIR, "cleaned_actual_vs_predicted_rf.png")
     plt.savefig(path_rf_clean)
     plt.close()
-    print(f"✅ نمودار Actual vs Predicted (RF, Cleaned) در '{path_rf_clean}' ذخیره شد.")
+    print(f"✅ Actual vs Predicted chart (RF, Cleaned) saved to '{path_rf_clean}'.")
 
-    # نمودار میله‌ای اهمیت ویژگی‌ها (Random Forest, Cleaned)
+    # Bar chart of Feature Importances (Random Forest, Cleaned)
     importances_c = rf_c.feature_importances_
     feature_names_c = X_clean.columns.tolist()
     fi_c = sorted(zip(feature_names_c, importances_c), key=lambda x: x[1], reverse=True)
@@ -496,50 +496,50 @@ def model_on_clean_data(df_clean, X_clean, y_clean):
     path_fi_clean = os.path.join(CHART_DIR, "cleaned_feature_importances.png")
     plt.savefig(path_fi_clean)
     plt.close()
-    print(f"✅ نمودار Feature Importances (Cleaned) در '{path_fi_clean}' ذخیره شد.")
+    print(f"✅ Feature Importances chart (Cleaned) saved to '{path_fi_clean}'.")
 
     return results
 
 
 # --------------------------------------------
-# 7. تابع اصلی برای اجرای همهٔ مراحل
+# 7. Main function to run all steps
 # --------------------------------------------
 def main():
-    # 1. اسکرپ داده‌ها و ذخیرهٔ CSV خام
+    # 1. Scrape data and save raw CSV
     df_raw = scrape_pokemon_stats(output_csv=RAW_CSV)
 
-    # 2. پیش‌پردازش اولیهٔ دادهٔ خام
+    # 2. Initial preprocessing of raw data
     df_raw, X_raw, y_raw = initial_preprocessing(input_csv=RAW_CSV)
 
-    # 3. ترسیم نمودارهای توزیع و همبستگی (Raw Data)
+    # 3. Plot distribution and correlation charts (Raw Data)
     plot_raw_data_insights(df_raw)
 
-    # 4. مدل‌سازی روی دادهٔ خام و نمودارهای مربوطه
+    # 4. Modeling on raw data and related charts
     results_raw = model_on_raw_data(df_raw, X_raw, y_raw)
 
-    # 5. پاک‌سازی داده‌ها
+    # 5. Data cleaning
     df_clean, X_clean, y_clean = clean_data(df_raw, output_csv=CLEAN_CSV)
 
-    # 6. مدل‌سازی روی دادهٔ پاک‌شده و نمودارهای مربوطه
+    # 6. Modeling on cleaned data and related charts
     results_clean = model_on_clean_data(df_clean, X_clean, y_clean)
 
-    # 7. نمایش و مقایسهٔ نتایج
-    print("\n--- مقایسهٔ نتایج قبل و بعد از پاک‌سازی داده‌ها ---")
+    # 7. Show and compare results
+    print("\n--- Comparison of results before and after data cleaning ---")
     if results_raw:
-        print("نتایج اولیه (Raw Data):")
+        print("Initial results (Raw Data):")
         for k, v in results_raw.items():
             print(f"  {k}: {v:.4f}")
     else:
-        print("نتایج اولیه (Raw Data): NA")
+        print("Initial results (Raw Data): NA")
 
     if results_clean:
-        print("\nنتایج پس از پاک‌سازی (Cleaned Data):")
+        print("\nResults after cleaning (Cleaned Data):")
         for k, v in results_clean.items():
             print(f"  {k}: {v:.4f}")
     else:
-        print("\nنتایج پس از پاک‌سازی (Cleaned Data): NA")
+        print("\nResults after cleaning (Cleaned Data): NA")
 
-    print("\n✅ پایان اجرای پروژه.")
+    print("\n✅ Project execution finished.")
 
 if __name__ == "__main__":
     main()
