@@ -523,6 +523,7 @@ def show_cluster_examples(df, clusters, n_clusters, title, filename):
     """
     Print and save sample Pokémon from each cluster, show cluster sizes,
     and print the mean stats for each cluster to explain what defines each group.
+    Also, for each cluster, print which stats are most characteristic (highest mean compared to other clusters).
     """
     df_clusters = df.copy()
     df_clusters["Cluster"] = clusters
@@ -537,6 +538,24 @@ def show_cluster_examples(df, clusters, n_clusters, title, filename):
     stat_cols = ["Total", "HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed"]
     cluster_means = df_clusters.groupby("Cluster")[stat_cols].mean().round(2)
     print(cluster_means)
+
+    # For each cluster, determine which stats are most characteristic
+    print("\nCluster characteristics (dominant stats):")
+    for i in range(n_clusters):
+        means = cluster_means.loc[i]
+        # Compare each stat to the mean of that stat in other clusters
+        dominant_stats = []
+        for stat in stat_cols:
+            stat_mean = means[stat]
+            other_means = cluster_means.drop(i)[stat]
+            if stat_mean == other_means.max() and stat_mean > other_means.mean():
+                dominant_stats.append(f"{stat} (highest)")
+            elif stat_mean == other_means.min() and stat_mean < other_means.mean():
+                dominant_stats.append(f"{stat} (lowest)")
+        if dominant_stats:
+            print(f"Cluster {i} is characterized by: {', '.join(dominant_stats)}")
+        else:
+            print(f"Cluster {i} does not have a single dominant stat compared to others.")
 
     print("\nSample Pokémon from each cluster:")
     for i in range(n_clusters):
